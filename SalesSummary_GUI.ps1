@@ -1,10 +1,10 @@
-﻿Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # --- GUI Form ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Sales Viewer"
-$form.Size = New-Object System.Drawing.Size(650,550)
+$form.Size = New-Object System.Drawing.Size(650,600)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "Sizable"
 
@@ -21,7 +21,6 @@ $txtFolder.Size = New-Object System.Drawing.Size(400,20)
 # Set default folder path
 $txtFolder.Text = Join-Path $env:USERPROFILE "AppData\LocalLow\Elder Game\Project Gorgon\Books"
 $form.Controls.Add($txtFolder)
-
 
 $btnBrowse = New-Object System.Windows.Forms.Button
 $btnBrowse.Text = "Browse..."
@@ -112,16 +111,30 @@ $txtTop.Size = New-Object System.Drawing.Size(50,20)
 $txtTop.Text = "10"
 $form.Controls.Add($txtTop)
 
+# --- Sort By Dropdown ---
+$lblSort = New-Object System.Windows.Forms.Label
+$lblSort.Text = "Sort By:"
+$lblSort.Location = New-Object System.Drawing.Point(20,300)
+$lblSort.AutoSize = $true
+$form.Controls.Add($lblSort)
+
+$cmbSort = New-Object System.Windows.Forms.ComboBox
+$cmbSort.Location = New-Object System.Drawing.Point(100,298)
+$cmbSort.Size = New-Object System.Drawing.Size(150,20)
+$cmbSort.Items.AddRange(@("Group","TotalSold","TotalEarned","AvgPrice"))
+$cmbSort.SelectedIndex = 2   # Default = TotalEarned
+$form.Controls.Add($cmbSort)
+
 # --- Run Button ---
 $btnRun = New-Object System.Windows.Forms.Button
 $btnRun.Text = "Run"
-$btnRun.Location = New-Object System.Drawing.Point(200,300)
+$btnRun.Location = New-Object System.Drawing.Point(200,340)
 $btnRun.Size = New-Object System.Drawing.Size(80,30)
 $form.Controls.Add($btnRun)
 
 # --- Output Box ---
 $txtOutput = New-Object System.Windows.Forms.TextBox
-$txtOutput.Location = New-Object System.Drawing.Point(20,350)
+$txtOutput.Location = New-Object System.Drawing.Point(20,390)
 $txtOutput.Size = New-Object System.Drawing.Size(600,160)
 $txtOutput.Multiline = $true
 $txtOutput.ScrollBars = "Vertical"
@@ -143,6 +156,7 @@ $btnRun.Add_Click({
     $topObsToShow = if ([int]::TryParse($txtTop.Text,[ref]$null)) { [int]$txtTop.Text } else { 0 }
     $startDate = [datetime]::Parse($txtStart.Text)
     $endDate   = [datetime]::Parse($txtEnd.Text)
+    $sortBy = $cmbSort.SelectedItem
 
     # --- Get files & latest logic ---
     $files = Get-ChildItem -Path $folder -Filter "PlayerShopLog_*.txt" |
@@ -193,13 +207,13 @@ $btnRun.Add_Click({
     }
 
     switch ($groupBy) {
-        "Buyer" { $groupProperty = "Buyer"; $sortBy = "TotalEarned"; $sortDescending = $true }
-        "Item" { $groupProperty = "Item"; $sortBy = "TotalEarned"; $sortDescending = $true }
-        "Year" { $groupProperty = @{Expression={$_.SaleDate.Year}}; $sortBy = "Group"; $sortDescending = $false }
-        "Month" { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM")}}; $sortBy = "Group"; $sortDescending = $false }
-        "Week" { $groupProperty = @{Expression={(Get-Date $_.SaleDate -UFormat "%Y-%U")}}; $sortBy = "Group"; $sortDescending = $false }
-        "Day" { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM-dd")}}; $sortBy = "Group"; $sortDescending = $false }
-        default { $groupProperty = "Item"; $sortBy = "TotalEarned"; $sortDescending = $true }
+        "Buyer" { $groupProperty = "Buyer" }
+        "Item"  { $groupProperty = "Item" }
+        "Year"  { $groupProperty = @{Expression={$_.SaleDate.Year}} }
+        "Month" { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM")}} }
+        "Week"  { $groupProperty = @{Expression={(Get-Date $_.SaleDate -UFormat "%Y-%U")}} }
+        "Day"   { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM-dd")}} }
+        default { $groupProperty = "Item" }
     }
 
     $result = $salesWithDate | Group-Object -Property $groupProperty | ForEach-Object {
@@ -208,18 +222,26 @@ $btnRun.Add_Click({
         $avgPrice    = if ($totalQty -gt 0) { [math]::Round($totalEarned / $totalQty,0) } else { 0 }
         [PSCustomObject]@{
             Group       = $_.Name
-            TotalSold   = "{0:N0}" -f $totalQty
-            TotalEarned = "{0:N0}" -f $totalEarned
-            AvgPrice    = "{0:N0}" -f $avgPrice
+            TotalSold   = $totalQty
+            TotalEarned = $totalEarned
+            AvgPrice    = $avgPrice
         }
-    } | Sort-Object -Property $sortBy -Descending:$sortDescending
+    }
+
+    # Sorting: Group ascending, others descending
+    $sortDescending = $true
+    if ($sortBy -eq "Group") { $sortDescending = $false }
+    $result = $result | Sort-Object -Property $sortBy -Descending:$sortDescending
 
     if ($topObsToShow -and $topObsToShow -gt 0) {
         $result = $result | Select-Object -First $topObsToShow
     }
 
-    $outputText = "Showing totals grouped by $groupBy`r`n"
-    $outputText += ($result | Format-Table -AutoSize | Out-String)
+    $outputText = "Showing totals grouped by $groupBy (sorted by $sortBy)`r`n"
+    $outputText += ($result | Format-Table @{Label="Group";Expression={$_.Group}},
+                                         @{Label="TotalSold";Expression={"{0:N0}" -f $_.TotalSold}},
+                                         @{Label="TotalEarned";Expression={"{0:N0}" -f $_.TotalEarned}},
+                                         @{Label="AvgPrice";Expression={"{0:N0}" -f $_.AvgPrice}} -AutoSize | Out-String)
     $txtOutput.Text = $outputText
 })
 
