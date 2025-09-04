@@ -18,7 +18,6 @@ $form.Controls.Add($lblFolder)
 $txtFolder = New-Object System.Windows.Forms.TextBox
 $txtFolder.Location = New-Object System.Drawing.Point(80,18)
 $txtFolder.Size = New-Object System.Drawing.Size(400,20)
-# Set default folder path
 $txtFolder.Text = Join-Path $env:USERPROFILE "AppData\LocalLow\Elder Game\Project Gorgon\Books"
 $form.Controls.Add($txtFolder)
 
@@ -122,7 +121,7 @@ $cmbSort = New-Object System.Windows.Forms.ComboBox
 $cmbSort.Location = New-Object System.Drawing.Point(100,298)
 $cmbSort.Size = New-Object System.Drawing.Size(150,20)
 $cmbSort.Items.AddRange(@("Group","TotalSold","TotalEarned","AvgPrice"))
-$cmbSort.SelectedIndex = 2   # Default = TotalEarned
+$cmbSort.SelectedIndex = 2
 $form.Controls.Add($cmbSort)
 
 # --- Run Button ---
@@ -158,7 +157,7 @@ $btnRun.Add_Click({
     $endDate   = [datetime]::Parse($txtEnd.Text)
     $sortBy = $cmbSort.SelectedItem
 
-    # --- Get files & latest logic ---
+    # --- Collect files ---
     $files = Get-ChildItem -Path $folder -Filter "PlayerShopLog_*.txt" |
              Where-Object { $_.BaseName -match '^PlayerShopLog_(\d{6})_(\d+)$' }
 
@@ -171,32 +170,68 @@ $btnRun.Add_Click({
         ($dateObj -ge $startDate) -and ($dateObj -le $endDate)
     }
 
-    $latestFiles = $files |
-        Group-Object { $_.BaseName -replace '^PlayerShopLog_(\d{6})_\d+$','$1' } |
-        ForEach-Object {
-            $_.Group | Sort-Object { [int]($_.BaseName -replace '^PlayerShopLog_\d{6}_(\d+)$','$1') } -Descending |
-            Select-Object -First 1
+    # Sort by date, then sequence
+    $files = $files | Sort-Object {
+        if ($_.BaseName -match '^PlayerShopLog_(\d{6})_(\d+)$') {
+            $date = $matches[1]
+            $seq  = [int]$matches[2]
+            [PSCustomObject]@{
+                DateKey = $date
+                Seq     = $seq
+            }
         }
+    } | Sort-Object DateKey, Seq
 
-    $salesWithDate = foreach ($file in $latestFiles) {
-        $fileDate = $file.BaseName -replace '^PlayerShopLog_(\d{6})_\d+$','$1'
-        $yy = [int]$fileDate.Substring(0,2)
-        $mm = [int]$fileDate.Substring(2,2)
-        $dd = [int]$fileDate.Substring(4,2)
-        $dateObj = Get-Date -Year (2000 + $yy) -Month $mm -Day $dd
+    # Deduplication across files
+    $seen = @{}
+    foreach ($file in $files) {
+        if ($file.BaseName -match '^PlayerShopLog_(\d{6})_(\d+)$') {
+            $fileDate = $matches[1]
+            $seq      = [int]$matches[2]
 
-        foreach ($line in Get-Content $file.FullName | Where-Object { $_ -match 'bought' }) {
-            if ($line -match "- (?<buyer>\S+) bought\s+(?<item>.+?)(?:\s*x(?<qty>\d+))?\s+at a cost.*=\s*(?<earned>\d+)$") {
-                [PSCustomObject]@{
-                    Buyer    = $matches['buyer']
-                    Item     = $matches['item'].Trim()
-                    Quantity = if ($matches['qty']) { [int]$matches['qty'] } else { 1 }
-                    Earned   = [int]$matches['earned']
-                    SaleDate = $dateObj
+            $yy = [int]$fileDate.Substring(0,2)
+            $mm = [int]$fileDate.Substring(2,2)
+            $dd = [int]$fileDate.Substring(4,2)
+            $dateObj = Get-Date -Year (2000 + $yy) -Month $mm -Day $dd
+
+            foreach ($line in Get-Content $file.FullName | Where-Object { $_ -match 'bought' }) {
+                if ($line -match "- (?<buyer>\S+) bought\s+(?<item>.+?)(?:\s*x(?<qty>\d+))?\s+at a cost.*=\s*(?<earned>\d+)$") {
+                    $buyer = $matches['buyer']
+                    $item  = $matches['item'].Trim()
+                    $qty   = if ($matches['qty']) { [int]$matches['qty'] } else { 1 }
+                    $earned = [int]$matches['earned']
+
+                    # unique key per line (date+buyer+item+qty+earned+line text)
+                    $key = "$fileDate|$buyer|$item|$qty|$earned|$line"
+
+                    if ($seen.ContainsKey($key)) {
+                        if ($seq -gt $seen[$key].Seq) {
+                            $seen[$key] = [PSCustomObject]@{
+                                Buyer    = $buyer
+                                Item     = $item
+                                Quantity = $qty
+                                Earned   = $earned
+                                SaleDate = $dateObj
+                                Seq      = $seq
+                            }
+                        }
+                    }
+                    else {
+                        $seen[$key] = [PSCustomObject]@{
+                            Buyer    = $buyer
+                            Item     = $item
+                            Quantity = $qty
+                            Earned   = $earned
+                            SaleDate = $dateObj
+                            Seq      = $seq
+                        }
+                    }
                 }
             }
         }
     }
+
+    $salesWithDate = $seen.Values
 
     if ($buyerFilter) { $salesWithDate = $salesWithDate | Where-Object { $_.Buyer -eq $buyerFilter } }
     if ($itemFilter)  { $salesWithDate = $salesWithDate | Where-Object { $_.Item -eq $itemFilter } }
@@ -228,7 +263,6 @@ $btnRun.Add_Click({
         }
     }
 
-    # Sorting: Group ascending, others descending
     $sortDescending = $true
     if ($sortBy -eq "Group") { $sortDescending = $false }
     $result = $result | Sort-Object -Property $sortBy -Descending:$sortDescending
