@@ -45,7 +45,8 @@ $form.Controls.Add($lblGroup)
 $cmbGroup = New-Object System.Windows.Forms.ComboBox
 $cmbGroup.Location = New-Object System.Drawing.Point(100,58)
 $cmbGroup.Size = New-Object System.Drawing.Size(150,20)
-$cmbGroup.Items.AddRange(@("Buyer","Item","Year","Month","Week","Day"))
+# Updated the items to include month and day names
+$cmbGroup.Items.AddRange(@("Buyer", "Item", "Year", "Month", "Month-Name", "Week", "Day", "Day-Name"))
 $cmbGroup.SelectedIndex = 1
 $form.Controls.Add($cmbGroup)
 
@@ -108,7 +109,7 @@ $form.Controls.Add($lblTop)
 $txtTop = New-Object System.Windows.Forms.TextBox
 $txtTop.Location = New-Object System.Drawing.Point(120,258)
 $txtTop.Size = New-Object System.Drawing.Size(50,20)
-$txtTop.Text = "10"
+$txtTop.Text = "20"
 $form.Controls.Add($txtTop)
 
 # --- Sort By Dropdown ---
@@ -271,8 +272,10 @@ $btnRun.Add_Click({
         "Item"  { $groupProperty = "Item" }
         "Year"  { $groupProperty = @{Expression={$_.SaleDate.Year}} }
         "Month" { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM")}} }
+        "Month-Name" { $groupProperty = @{Expression={$_.SaleDate.ToString("MMMM")}} }
         "Week"  { $groupProperty = @{Expression={(Get-Date $_.SaleDate -UFormat "%Y-%U")}} }
         "Day"   { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM-dd")}} }
+        "Day-Name" { $groupProperty = @{Expression={$_.SaleDate.ToString("dddd")}} }
         default { $groupProperty = "Item" }
     }
 
