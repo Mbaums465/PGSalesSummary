@@ -45,8 +45,7 @@ $form.Controls.Add($lblGroup)
 $cmbGroup = New-Object System.Windows.Forms.ComboBox
 $cmbGroup.Location = New-Object System.Drawing.Point(100,58)
 $cmbGroup.Size = New-Object System.Drawing.Size(150,20)
-# Updated the items to include month and day names
-$cmbGroup.Items.AddRange(@("Buyer", "Item", "Year", "Month", "Month-Name", "Week", "Day", "Day-Name"))
+$cmbGroup.Items.AddRange(@("Buyer","Item","Year","Month","Week","Day"))
 $cmbGroup.SelectedIndex = 1
 $form.Controls.Add($cmbGroup)
 
@@ -73,6 +72,12 @@ $txtItem = New-Object System.Windows.Forms.TextBox
 $txtItem.Location = New-Object System.Drawing.Point(100,138)
 $txtItem.Size = New-Object System.Drawing.Size(150,20)
 $form.Controls.Add($txtItem)
+
+$chkExact = New-Object System.Windows.Forms.CheckBox
+$chkExact.Text = "Exact"
+$chkExact.Location = New-Object System.Drawing.Point(260,140)
+$chkExact.AutoSize = $true
+$form.Controls.Add($chkExact)
 
 # --- Date Filters ---
 $lblStart = New-Object System.Windows.Forms.Label
@@ -109,7 +114,7 @@ $form.Controls.Add($lblTop)
 $txtTop = New-Object System.Windows.Forms.TextBox
 $txtTop.Location = New-Object System.Drawing.Point(120,258)
 $txtTop.Size = New-Object System.Drawing.Size(50,20)
-$txtTop.Text = "20"
+$txtTop.Text = "10"
 $form.Controls.Add($txtTop)
 
 # --- Sort By Dropdown ---
@@ -143,50 +148,6 @@ $txtOutput.Font = New-Object System.Drawing.Font("Consolas",10)
 $txtOutput.Anchor = "Top, Bottom, Left, Right"
 $form.Controls.Add($txtOutput)
 
-# --- Helper function to parse sales date from log content ---
-function Get-SalesDateFromLog {
-    param(
-        [string]$FilePath,
-        [datetime]$ExtractDate
-    )
-    
-    $firstLine = Get-Content $FilePath -First 1
-    if ($firstLine -match "^(\w{3}) (\w{3}) (\d{1,2}) \d{2}:\d{2}") {
-        $dayOfWeek = $matches[1]
-        $month = $matches[2]
-        $day = [int]$matches[3]
-        
-        # Convert month abbreviation to number
-        $monthNumber = switch ($month) {
-            "Jan" { 1 }  "Feb" { 2 }  "Mar" { 3 }  "Apr" { 4 }
-            "May" { 5 }  "Jun" { 6 }  "Jul" { 7 }  "Aug" { 8 }
-            "Sep" { 9 }  "Oct" { 10 } "Nov" { 11 } "Dec" { 12 }
-            default { 1 }
-        }
-        
-        # Try the extract year first
-        $year = $ExtractDate.Year
-        $candidateDate = Get-Date -Year $year -Month $monthNumber -Day $day
-        
-        # If the candidate date is more than 10 days after extract date, try previous year
-        if ($candidateDate -gt $ExtractDate.AddDays(10)) {
-            $year = $ExtractDate.Year - 1
-            $candidateDate = Get-Date -Year $year -Month $monthNumber -Day $day
-        }
-        
-        # If still more than 10 days in the future, try next year
-        if ($candidateDate -lt $ExtractDate.AddDays(-10)) {
-            $year = $ExtractDate.Year + 1
-            $candidateDate = Get-Date -Year $year -Month $monthNumber -Day $day
-        }
-        
-        return $candidateDate
-    }
-    
-    # Fallback to extract date if we can't parse the log
-    return $ExtractDate
-}
-
 # --- Button click action ---
 $btnRun.Add_Click({
     $folder = $txtFolder.Text
@@ -198,69 +159,60 @@ $btnRun.Add_Click({
     $groupBy = $cmbGroup.SelectedItem
     $buyerFilter = $txtBuyer.Text
     $itemFilter  = $txtItem.Text
+    $itemExact   = $chkExact.Checked
     $topObsToShow = if ([int]::TryParse($txtTop.Text,[ref]$null)) { [int]$txtTop.Text } else { 0 }
     $startDate = [datetime]::Parse($txtStart.Text)
     $endDate   = [datetime]::Parse($txtEnd.Text)
     $sortBy = $cmbSort.SelectedItem
 
-    # --- Get files and parse extract dates ---
+    # --- Get files & latest logic ---
     $files = Get-ChildItem -Path $folder -Filter "PlayerShopLog_*.txt" |
              Where-Object { $_.BaseName -match '^PlayerShopLog_(\d{6})_(\d+)$' }
 
-    # Create file objects with extract dates and sales dates
-    $fileInfo = foreach ($file in $files) {
-        if ($file.BaseName -match '^PlayerShopLog_(\d{6})_(\d+)$') {
-            $extractDateStr = $matches[1]
-            $sequence = [int]$matches[2]
-            
-            # Parse extract date from filename
-            $yy = [int]$extractDateStr.Substring(0,2)
-            $mm = [int]$extractDateStr.Substring(2,2)
-            $dd = [int]$extractDateStr.Substring(4,2)
-            $extractDate = Get-Date -Year (2000 + $yy) -Month $mm -Day $dd
-            
-            # Get sales date from log content
-            $salesDate = Get-SalesDateFromLog -FilePath $file.FullName -ExtractDate $extractDate
-            
-            [PSCustomObject]@{
-                File = $file
-                ExtractDate = $extractDate
-                SalesDate = $salesDate
-                Sequence = $sequence
-            }
-        }
+    $files = $files | Where-Object {
+        $fileDate = $_.BaseName -replace '^PlayerShopLog_(\d{6})_\d+$','$1'
+        $yy = [int]$fileDate.Substring(0,2)
+        $mm = [int]$fileDate.Substring(2,2)
+        $dd = [int]$fileDate.Substring(4,2)
+        $dateObj = Get-Date -Year (2000 + $yy) -Month $mm -Day $dd
+        ($dateObj -ge $startDate) -and ($dateObj -le $endDate)
     }
 
-    # Filter by date range based on sales date
-    $fileInfo = $fileInfo | Where-Object {
-        ($_.SalesDate -ge $startDate) -and ($_.SalesDate -le $endDate)
-    }
-
-    # Handle duplicates: Group by sales date and take the latest extract date
-    $latestFiles = $fileInfo |
-        Group-Object { $_.SalesDate.ToString("yyyy-MM-dd") } |
+    $latestFiles = $files |
+        Group-Object { $_.BaseName -replace '^PlayerShopLog_(\d{6})_\d+$','$1' } |
         ForEach-Object {
-            # For same sales date, take the latest extract date (then highest sequence if same extract date)
-            $_.Group | Sort-Object ExtractDate, Sequence -Descending | Select-Object -First 1
+            $_.Group | Sort-Object { [int]($_.BaseName -replace '^PlayerShopLog_\d{6}_(\d+)$','$1') } -Descending |
+            Select-Object -First 1
         }
 
-    # Process sales data
-    $salesWithDate = foreach ($fileData in $latestFiles) {
-        foreach ($line in Get-Content $fileData.File.FullName | Where-Object { $_ -match 'bought' }) {
+    $salesWithDate = foreach ($file in $latestFiles) {
+        $fileDate = $file.BaseName -replace '^PlayerShopLog_(\d{6})_\d+$','$1'
+        $yy = [int]$fileDate.Substring(0,2)
+        $mm = [int]$fileDate.Substring(2,2)
+        $dd = [int]$fileDate.Substring(4,2)
+        $dateObj = Get-Date -Year (2000 + $yy) -Month $mm -Day $dd
+
+        foreach ($line in Get-Content $file.FullName | Where-Object { $_ -match 'bought' }) {
             if ($line -match "- (?<buyer>\S+) bought\s+(?<item>.+?)(?:\s*x(?<qty>\d+))?\s+at a cost.*=\s*(?<earned>\d+)$") {
                 [PSCustomObject]@{
                     Buyer    = $matches['buyer']
                     Item     = $matches['item'].Trim()
                     Quantity = if ($matches['qty']) { [int]$matches['qty'] } else { 1 }
                     Earned   = [int]$matches['earned']
-                    SaleDate = $fileData.SalesDate
+                    SaleDate = $dateObj
                 }
             }
         }
     }
 
     if ($buyerFilter) { $salesWithDate = $salesWithDate | Where-Object { $_.Buyer -eq $buyerFilter } }
-    if ($itemFilter)  { $salesWithDate = $salesWithDate | Where-Object { $_.Item -eq $itemFilter } }
+    if ($itemFilter) {
+        if ($itemExact) {
+            $salesWithDate = $salesWithDate | Where-Object { $_.Item -eq $itemFilter }
+        } else {
+            $salesWithDate = $salesWithDate | Where-Object { $_.Item -like "*$itemFilter*" }
+        }
+    }
 
     if (-not $salesWithDate) {
         $txtOutput.Text = "No sales found for the applied filters."
@@ -272,10 +224,8 @@ $btnRun.Add_Click({
         "Item"  { $groupProperty = "Item" }
         "Year"  { $groupProperty = @{Expression={$_.SaleDate.Year}} }
         "Month" { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM")}} }
-        "Month-Name" { $groupProperty = @{Expression={$_.SaleDate.ToString("MMMM")}} }
         "Week"  { $groupProperty = @{Expression={(Get-Date $_.SaleDate -UFormat "%Y-%U")}} }
         "Day"   { $groupProperty = @{Expression={$_.SaleDate.ToString("yyyy-MM-dd")}} }
-        "Day-Name" { $groupProperty = @{Expression={$_.SaleDate.ToString("dddd")}} }
         default { $groupProperty = "Item" }
     }
 
