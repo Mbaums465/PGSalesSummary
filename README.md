@@ -1,125 +1,188 @@
-================================================================================
-                        SALES VIEWER - README
-================================================================================
+# Project Gorgon Sales Viewer
 
-DESCRIPTION:
-Sales Viewer is a PowerShell GUI application that reads Project Gorgon shop logs 
-and displays sales data with flexible filtering, grouping, and sorting options.
+A PowerShell GUI application for analyzing Project Gorgon shop sales data with flexible filtering, grouping, and sorting capabilities.
 
-================================================================================
-REQUIREMENTS:
-================================================================================
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Filtering Options](#filtering-options)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Overview
+
+Sales Viewer parses Project Gorgon shop log files and provides an intuitive GUI for analyzing your sales history. Track your best-selling items, most frequent buyers, revenue trends, and more with customizable filters and grouping options.
+
+## Features
+
+- 📊 **Flexible Grouping** - Organize sales by Buyer, Item, Year, Month, Week, or Day
+- 🔍 **Advanced Filtering** - Filter by buyer name, item name (exact or partial match), and date range
+- 📈 **Multiple Sort Options** - Sort by group name, quantity sold, total earnings, or average price
+- 💰 **Revenue Analysis** - View total earnings, quantities sold, and average prices
+- 🎯 **Top N Results** - Limit results to see your top performers
+- 🖥️ **User-Friendly GUI** - Easy-to-use Windows Forms interface
+
+## Requirements
+
 - Windows PowerShell 5.0 or later (or PowerShell 7+)
-- Project Gorgon shop log files in the default or custom folder location
-- Shop log files must be named: PlayerShopLog_YYMMDD_#.txt
+- Project Gorgon installed with shop logs enabled
+- Shop log files in format: `PlayerShopLog_YYMMDD_#.txt`
 
-================================================================================
-HOW TO RUN:
-================================================================================
-1. Double-click RunSalesSummary.bat to launch the application
+## Installation
 
-OR
+1. Clone or download this repository:
+   ```bash
+   git clone https://github.com/Mbaums465/PGSalesSummary.git
+   ```
 
-2. Open PowerShell
-3. Run the script:
-   .\sales_viewer.ps1
+2. Navigate to the project directory:
+   ```bash
+   cd PGSalesSummary
+   ```
 
-The GUI window will open immediately.
+3. No additional dependencies required - uses built-in PowerShell modules
 
-================================================================================
-FEATURES & CONTROLS:
-================================================================================
+## Usage
 
-FOLDER SELECTION:
-  - Default folder: AppData\LocalLow\Elder Game\Project Gorgon\Books
-  - Browse: Click to manually select a different folder
+### Quick Start
 
-GROUP BY:
-  - Select how to organize results: Buyer, Item, Year, Month, Week, or Day
+**Option 1:** Double-click `RunSalesSummary.bat`
 
-BUYER FILTER:
-  - Enter a buyer name to filter sales by specific players
-  - Leave blank to include all buyers
+**Option 2:** Run via PowerShell:
+```powershell
+.\sales_viewer.ps1
+```
 
-ITEM FILTER:
-  - Enter an item name to filter sales
-  - "Exact" checkbox: 
-    * CHECKED = exact item name match only
-    * UNCHECKED = partial match (finds "sword", "wooden sword", etc.)
-  - Leave blank to include all items
+### Default Log Location
 
-DATE FILTERS:
-  - Start Date: Beginning of the date range (defaults to Jan 1 of current year)
-  - End Date: End of the date range (defaults to today)
-  - Format: MM/DD/YYYY
+The application automatically looks for shop logs in:
+```
+%AppData%\LocalLow\Elder Game\Project Gorgon\Books
+```
 
-TOP N RESULTS:
-  - Enter a number to limit results (e.g., 10 for top 10)
-  - Leave blank or 0 to show all results
+Use the **Browse** button to select a different folder if needed.
 
-SORT BY:
-  - Group: Sort alphabetically by group name (ascending)
-  - TotalSold: Sort by quantity sold (descending)
-  - TotalEarned: Sort by total earnings (descending, default)
-  - AvgPrice: Sort by average price per item (descending)
+## Filtering Options
 
-RUN:
-  - Click to execute the query and display results
+### Group By
+Organize your results by:
+- **Buyer** - See sales per customer
+- **Item** - Track item performance
+- **Year/Month/Week/Day** - Analyze time-based trends
 
-OUTPUT:
-  - Results appear in the text box below
-  - Shows: Group, TotalSold, TotalEarned, AvgPrice
+### Filters
 
-================================================================================
-EXAMPLES:
-================================================================================
+| Filter | Description |
+|--------|-------------|
+| **Buyer Filter** | Enter a player name to view their purchases only |
+| **Item Filter** | Search for specific items (partial or exact match) |
+| **Exact Match** | ☑ Checked = exact name only<br>☐ Unchecked = partial match |
+| **Date Range** | Start and end dates (MM/DD/YYYY format) |
+| **Top N Results** | Limit to top X results (leave blank for all) |
 
-EXAMPLE 1: Top 5 most profitable items
-  - Item Filter: (blank)
-  - Group By: Item
-  - Sort By: TotalEarned
-  - Top N Results: 5
+### Sort Options
 
-EXAMPLE 2: Exact match for a specific item
-  - Item Filter: Iron Ore
-  - Exact: CHECKED
-  - Group By: Buyer
-  - Shows only sales of exactly "Iron Ore" by each buyer
+- **Group** - Alphabetical by group name (A-Z)
+- **TotalSold** - By quantity sold (high to low)
+- **TotalEarned** - By total revenue (high to low) ⭐ *Default*
+- **AvgPrice** - By average price per unit (high to low)
 
-EXAMPLE 3: Search for items containing "sword"
-  - Item Filter: sword
-  - Exact: UNCHECKED
-  - Group By: Item
-  - Shows all items with "sword" in the name
+## Examples
 
-EXAMPLE 4: Daily sales report for a specific buyer
-  - Buyer Filter: PlayerName
-  - Group By: Day
-  - Sort By: TotalEarned
-  - Shows daily totals for that player
+### Example 1: Top 5 Most Profitable Items
+```
+Group By: Item
+Sort By: TotalEarned
+Top N Results: 5
+Item Filter: (blank)
+```
+*Shows your 5 highest-grossing items*
 
-================================================================================
-TROUBLESHOOTING:
-================================================================================
+### Example 2: Specific Item Sales by Buyer
+```
+Group By: Buyer
+Item Filter: Iron Ore
+Exact: ☑ CHECKED
+Sort By: TotalSold
+```
+*Shows who bought "Iron Ore" (exact match) and how much*
 
-ERROR: "Please select a valid folder"
-  - Verify the folder path exists and contains PlayerShopLog_*.txt files
-  - Click Browse to manually select the folder
+### Example 3: Find All Sword-Related Items
+```
+Group By: Item
+Item Filter: sword
+Exact: ☐ UNCHECKED
+Sort By: TotalEarned
+```
+*Returns all items containing "sword" in the name*
 
-ERROR: "No sales found for the applied filters"
-  - Adjust your filters (dates, buyer name, item name)
-  - Ensure files exist in the selected folder for the date range
+### Example 4: Daily Sales Report for a Customer
+```
+Group By: Day
+Buyer Filter: PlayerName
+Sort By: TotalEarned
+Date Range: 01/01/2025 - 03/31/2025
+```
+*Shows daily purchase totals for a specific player*
 
-SCRIPT WON'T RUN:
-  - Check PowerShell execution policy
-  - Ensure .ps1 file is saved in correct location
+### Example 5: This Month's Top 10 Buyers
+```
+Group By: Buyer
+Date Range: [First of month] - [Today]
+Sort By: TotalEarned
+Top N Results: 10
+```
+*See your best customers this month*
 
-================================================================================
-NOTES:
-================================================================================
-- Only the latest version of each day's log file is used
-- Item matching is case-insensitive
+## Troubleshooting
+
+### "Please select a valid folder"
+- Verify the folder exists and contains `PlayerShopLog_*.txt` files
+- Use the **Browse** button to manually select the correct folder
+- Check that Project Gorgon has created shop log files
+
+### "No sales found for the applied filters"
+- Adjust your date range - logs may not exist for all dates
+- Check filter spelling (buyer and item names are case-insensitive)
+- Verify the selected folder contains log files
+
+### Script Won't Run
+- Check PowerShell execution policy:
+  ```powershell
+  Get-ExecutionPolicy
+  ```
+- If restricted, you may need to run:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+- Ensure the `.ps1` file hasn't been corrupted during download
+
+### Missing or Incomplete Data
+- Only the **latest version** of each day's log file is processed
+- Ensure shop logs are enabled in Project Gorgon settings
+- Check that log files aren't corrupted or empty
+
+## Technical Notes
+
+- Item name matching is case-insensitive
 - Quantities and prices are formatted with commas for readability
-- All calculations use integer math (prices are rounded)
+- All price calculations use integer math (rounded values)
+- Duplicate log files (same day) - only the highest numbered file is used
 
-================================================================================
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+What? I have no License.
+
+---
+
+**Project Gorgon** is a trademark of Elder Game, LLC. This tool is a fan-made project and is not officially associated with or endorsed by Elder Game.
