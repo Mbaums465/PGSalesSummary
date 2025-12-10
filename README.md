@@ -1,4 +1,5 @@
 # Project Gorgon Sales Viewer
+#Sorry, this is no longer supported 
 
 A PowerShell GUI application for analyzing Project Gorgon shop sales data with flexible filtering, grouping, and sorting capabilities.
 
